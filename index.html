@@ -1,55 +1,1143 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chemdraw Alternative</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
+    <title>KetchDraw - Molecular Structure Editor</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚗️</text></svg>">
+    <!-- Chart.js for radar plots -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --bg-card: #1a2744;
+            --accent: #e94560;
+            --success: #4ecca3;
+            --warning: #ffc107;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888;
+            --border: #1a4a7a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            background: var(--bg-primary);
+        }
+
+        .app-header {
+            height: 48px;
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 12px;
+        }
+
+        .app-logo {
+            font-size: 24px;
+        }
+
+        .app-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .app-title span {
+            color: var(--accent);
+        }
+
+        .app-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 12px;
+            padding-left: 12px;
+            border-left: 1px solid var(--border);
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 48px);
+            width: 100vw;
+            position: relative;
+        }
+
+        #ketcher-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+        }
+
+        #ketcher-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Toggle button - positioned outside the panel */
+        .panel-toggle {
+            position: absolute;
+            right: 320px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 56px;
+            background: var(--bg-tertiary);
+            border: none;
+            border-radius: 6px 0 0 6px;
+            color: var(--accent);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 100;
+            transition: right 0.3s ease, background 0.2s;
+        }
+
+        .panel-toggle:hover {
+            background: var(--border);
+        }
+
+        .panel-toggle.collapsed {
+            right: 0;
+        }
+
+        .properties-panel {
+            width: 320px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease, margin-right 0.3s ease;
+            border-left: 1px solid var(--bg-tertiary);
+        }
+
+        .properties-panel.collapsed {
+            width: 0;
+            overflow: hidden;
+            border-left: none;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .panel-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-header svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 4px;
+        }
+
+        .view-toggle button {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .view-toggle button:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .view-toggle button.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .molecules-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .radar-container {
+            flex: 1;
+            padding: 16px;
+            display: none;
+        }
+
+        .radar-container.active {
+            display: block;
+        }
+
+        .molecules-list.hidden {
+            display: none;
+        }
+
+        .molecule-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            border: 1px solid var(--bg-tertiary);
+        }
+
+        .molecule-header {
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--accent);
+            gap: 8px;
+        }
+
+        .molecule-smiles {
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-family: monospace;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--bg-tertiary);
+            padding: 1px;
+        }
+
+        .property-cell {
+            background: var(--bg-card);
+            padding: 6px 8px;
+            text-align: center;
+        }
+
+        .property-label {
+            font-size: 9px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            letter-spacing: 0.3px;
+        }
+
+        .property-value {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .property-value.warning {
+            color: var(--warning);
+        }
+
+        .property-value.alert {
+            color: var(--accent);
+        }
+
+        .no-molecules {
+            text-align: center;
+            padding: 40px 20px;
+            color: #555;
+        }
+
+        .no-molecules svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .no-molecules p {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 26, 46, 0.97);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 16px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .loading-subtext {
+            margin-top: 8px;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .status-bar {
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            font-size: 11px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            white-space: nowrap;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .status-dot.ready {
+            background: var(--success);
+        }
+
+        /* Custom scrollbar */
+        .molecules-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .molecules-list::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        .molecules-list::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+        }
+
+        .molecules-list::-webkit-scrollbar-thumb:hover {
+            background: var(--border);
+        }
+
+        .copy-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 2px 6px;
+            font-size: 12px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+        }
+
+        .copy-btn:hover {
+            opacity: 1;
+            color: var(--success);
+        }
+
+        .structure-preview {
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            margin: 8px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .structure-preview svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        #radar-chart {
+            max-height: 400px;
+        }
+
+        .radar-legend {
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            font-size: 11px;
+        }
+
+        .radar-legend-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .radar-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .radar-legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
 <body>
-    <div id="app-container">
+    <div class="loading-overlay" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading KetchDraw...</div>
+        <div class="loading-subtext" id="loading-status">Initializing RDKit...</div>
+    </div>
+
+    <header class="app-header">
+        <span class="app-logo">⚗️</span>
+        <h1 class="app-title">Ketch<span>Draw</span></h1>
+        <span class="app-subtitle">Molecular Structure Editor</span>
+    </header>
+
+    <div class="main-container">
         <div id="ketcher-container">
-            <iframe id="ketcher-frame" src="assets/ketcher/standalone/index.html"></iframe>
+            <iframe id="ketcher-frame" src="ketcher/index.html"></iframe>
         </div>
-        <div id="properties-panel">
+
+        <button class="panel-toggle" id="panel-toggle" title="Toggle Properties Panel">
+            <span>◀</span>
+        </button>
+
+        <div class="properties-panel" id="properties-panel">
             <div class="panel-header">
-                <h2>Properties</h2>
-                <div class="view-toggles">
-                    <button id="btn-card-large" class="toggle-btn active" title="Large Cards">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M4 5h16v14H4V5zm2 2v10h12V7H6z" />
-                        </svg>
-                    </button>
-                    <button id="btn-card-compact" class="toggle-btn" title="Compact Cards">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M4 5h16v4H4V5zm0 5h16v4H4v-4zm0 5h16v4H4v-4z" />
-                        </svg>
-                    </button>
-                    <button id="btn-radar" class="toggle-btn" title="Radar Plot">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M12 2L2 22h20L12 2zm0 3.5l6.5 13H5.5L12 5.5z" />
-                        </svg>
-                    </button>
+                <div class="panel-header-left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0-6v6"/>
+                    </svg>
+                    Properties
+                </div>
+                <div class="view-toggle">
+                    <button id="view-cards" class="active" title="Card View">Cards</button>
+                    <button id="view-radar" title="Radar Plot">Radar</button>
                 </div>
             </div>
-            <div id="loading-status">Initializing RDKit...</div>
-            <div id="properties-content">
-                <p class="hint">Draw a molecule to see properties.</p>
+
+            <div class="molecules-list" id="molecules-list">
+                <div class="no-molecules">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="3"/>
+                        <circle cx="4" cy="8" r="2"/>
+                        <circle cx="20" cy="8" r="2"/>
+                        <circle cx="4" cy="16" r="2"/>
+                        <circle cx="20" cy="16" r="2"/>
+                        <path d="M6 8h3M15 8h3M6 16h3M15 16h3M12 9V6M12 18v-3"/>
+                    </svg>
+                    <p>Draw a molecule in Ketcher to see its properties</p>
+                </div>
             </div>
-            <div id="radar-container" style="display:none; position: relative; height: 300px; width:100%;">
-                <canvas id="radarChart"></canvas>
+
+            <div class="radar-container" id="radar-container">
+                <canvas id="radar-chart"></canvas>
+                <div class="radar-legend" id="radar-legend"></div>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="status-text">Initializing...</span>
+                </div>
+                <span id="molecule-count">0 molecules</span>
             </div>
         </div>
     </div>
 
-    <!-- Load RDKit JS -->
-    <script src="assets/RDKit_minimal.js"></script>
-    <!-- Load Chart.js -->
-    <script src="assets/chart.js"></script>
-    <!-- Load Main Logic -->
-    <script src="js/main.js"></script>
-</body>
+    <script>
+        let RDKit = null;
+        let ketcherInstance = null;
+        let lastCommittedSmiles = ''; // Only stores actually committed/placed molecules
+        let isRDKitReady = false;
+        let isKetcherReady = false;
+        let currentMolecules = [];
+        let radarChart = null;
+        let currentView = 'cards'; // 'cards' or 'radar'
+        let pendingUpdate = false;
+        let userHasInteracted = false;
 
+        // RDKit CDN base URL
+        const RDKIT_CDN_BASE = 'https://unpkg.com/@rdkit/rdkit/dist/';
+
+        // Radar chart ranges (with min and max)
+        const RADAR_RANGES = {
+            mw: { min: 0, max: 600, label: 'MW' },
+            clogp: { min: -1, max: 6, label: 'cLogP' },
+            tpsa: { min: 0, max: 140, label: 'TPSA' },
+            fsp3: { min: 0, max: 1, label: 'Fsp3' },
+            hba: { min: 0, max: 10, label: 'HBA' },
+            hbd: { min: 0, max: 5, label: 'HBD' },
+            rotBonds: { min: 0, max: 10, label: 'RotB' },
+            arRings: { min: 0, max: 5, label: 'ArRings' },
+            stereo: { min: 0, max: 4, label: 'Stereo' },
+            unspecified: { min: 0, max: 4, label: 'Unspec' }
+        };
+
+        // Colors for multiple molecules in radar
+        const MOLECULE_COLORS = [
+            { bg: 'rgba(233, 69, 96, 0.3)', border: 'rgba(233, 69, 96, 1)' },
+            { bg: 'rgba(78, 204, 163, 0.3)', border: 'rgba(78, 204, 163, 1)' },
+            { bg: 'rgba(255, 193, 7, 0.3)', border: 'rgba(255, 193, 7, 1)' },
+            { bg: 'rgba(100, 149, 237, 0.3)', border: 'rgba(100, 149, 237, 1)' },
+            { bg: 'rgba(186, 85, 211, 0.3)', border: 'rgba(186, 85, 211, 1)' }
+        ];
+
+        // Load RDKit dynamically
+        async function loadRDKitScript() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = RDKIT_CDN_BASE + 'RDKit_minimal.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        // Initialize RDKit
+        async function initRDKit() {
+            try {
+                document.getElementById('loading-status').textContent = 'Loading RDKit...';
+                await loadRDKitScript();
+
+                document.getElementById('loading-status').textContent = 'Initializing RDKit (this may take a moment)...';
+
+                let attempts = 0;
+                while (!window.initRDKitModule && attempts < 100) {
+                    await new Promise(r => setTimeout(r, 100));
+                    attempts++;
+                }
+
+                if (!window.initRDKitModule) {
+                    throw new Error('RDKit module not found');
+                }
+
+                RDKit = await window.initRDKitModule({
+                    locateFile: (file) => RDKIT_CDN_BASE + file
+                });
+
+                console.log('RDKit initialized:', RDKit.version());
+                isRDKitReady = true;
+                document.getElementById('loading-status').textContent = 'Loading Ketcher...';
+                checkReady();
+            } catch (error) {
+                console.error('RDKit failed:', error);
+                document.getElementById('loading-status').textContent = 'RDKit failed: ' + error.message;
+                updateStatus('RDKit failed', false);
+            }
+        }
+
+        // Initialize Ketcher
+        function initKetcher() {
+            const frame = document.getElementById('ketcher-frame');
+
+            // Listen for Ketcher init message
+            window.addEventListener('message', (event) => {
+                if (event.data.eventType === 'init') {
+                    console.log('Ketcher initialized via message');
+                    ketcherInstance = frame.contentWindow.ketcher;
+                    isKetcherReady = true;
+                    checkReady();
+                    setupInteractionDetection();
+                }
+            });
+
+            // Also try direct access after load
+            frame.onload = () => {
+                setTimeout(() => {
+                    try {
+                        if (frame.contentWindow && frame.contentWindow.ketcher) {
+                            ketcherInstance = frame.contentWindow.ketcher;
+                            console.log('Ketcher connected directly');
+                            if (!isKetcherReady) {
+                                isKetcherReady = true;
+                                checkReady();
+                                setupInteractionDetection();
+                            }
+                        }
+                    } catch (e) {
+                        console.log('Direct Ketcher access failed:', e);
+                    }
+                }, 2000);
+            };
+        }
+
+        // Setup interaction detection - only update after actual user interaction
+        function setupInteractionDetection() {
+            const frame = document.getElementById('ketcher-frame');
+
+            // Detect mouse clicks on the iframe
+            // When iframe is focused and user clicks, we trigger an update check
+            frame.addEventListener('mouseenter', () => {
+                userHasInteracted = false;
+            });
+
+            // Use a focus-based approach: when user clicks in Ketcher, it gets focus
+            // We detect blur (leaving Ketcher) to trigger update
+            window.addEventListener('blur', () => {
+                // Window lost focus, might be interacting with Ketcher iframe
+            });
+
+            // Detect when user is done interacting (mouse leaves iframe area)
+            frame.addEventListener('mouseleave', () => {
+                if (userHasInteracted) {
+                    triggerDelayedUpdate();
+                }
+            });
+
+            // Listen for mouseup events which indicate structure placement
+            document.addEventListener('mouseup', (e) => {
+                // Check if the click was likely in the Ketcher area
+                const frameRect = frame.getBoundingClientRect();
+                if (e.clientX >= frameRect.left && e.clientX <= frameRect.right &&
+                    e.clientY >= frameRect.top && e.clientY <= frameRect.bottom) {
+                    userHasInteracted = true;
+                    triggerDelayedUpdate();
+                }
+            });
+
+            // Also listen for keyboard events (for delete, paste, etc.)
+            document.addEventListener('keyup', (e) => {
+                if (['Delete', 'Backspace', 'Enter', 'v', 'V', 'z', 'Z'].includes(e.key)) {
+                    userHasInteracted = true;
+                    triggerDelayedUpdate();
+                }
+            });
+
+            // Periodic check as fallback, but only update if structure actually changed
+            setInterval(() => {
+                checkForCommittedChanges();
+            }, 1000);
+        }
+
+        let updateTimer = null;
+        function triggerDelayedUpdate() {
+            // Clear any pending update
+            if (updateTimer) clearTimeout(updateTimer);
+
+            // Wait a bit after interaction for Ketcher to finalize the structure
+            updateTimer = setTimeout(() => {
+                checkForCommittedChanges();
+            }, 300);
+        }
+
+        async function checkForCommittedChanges() {
+            if (!ketcherInstance || !isRDKitReady) return;
+
+            try {
+                const smiles = await ketcherInstance.getSmiles();
+
+                // Only update if SMILES actually changed from last committed state
+                if (smiles !== lastCommittedSmiles) {
+                    lastCommittedSmiles = smiles;
+                    calculateProperties(smiles);
+                }
+            } catch (e) {
+                // Silently handle errors
+            }
+        }
+
+        function checkReady() {
+            if (isRDKitReady && isKetcherReady) {
+                document.getElementById('loading').classList.add('hidden');
+                updateStatus('Ready', true);
+            }
+        }
+
+        function updateStatus(text, ready) {
+            document.getElementById('status-text').textContent = text;
+            document.getElementById('status-dot').classList.toggle('ready', ready);
+        }
+
+        // Calculate molecular properties
+        function calculateProperties(smilesString) {
+            if (!RDKit || !smilesString || smilesString.trim() === '') {
+                currentMolecules = [];
+                renderView();
+                return;
+            }
+
+            // Split by '.' for multiple molecules
+            const smilesList = smilesString.split('.').filter(s => s.trim() !== '');
+
+            if (smilesList.length === 0) {
+                currentMolecules = [];
+                renderView();
+                return;
+            }
+
+            currentMolecules = [];
+
+            for (const smiles of smilesList) {
+                try {
+                    const mol = RDKit.get_mol(smiles.trim());
+                    if (mol) {
+                        const props = calculateMolProps(mol, smiles.trim());
+                        currentMolecules.push(props);
+                        mol.delete();
+                    }
+                } catch (e) {
+                    console.error('Error processing:', smiles, e);
+                    currentMolecules.push({ smiles: smiles.trim(), error: true });
+                }
+            }
+
+            renderView();
+        }
+
+        function calculateMolProps(mol, smiles) {
+            const descriptors = JSON.parse(mol.get_descriptors());
+
+            // Count stereocenters from SMILES
+            const definedStereo = (smiles.match(/@@?/g) || []).length;
+
+            // Get SVG for preview
+            let svg = '';
+            try {
+                svg = mol.get_svg(200, 150);
+            } catch (e) {
+                console.warn('SVG generation failed');
+            }
+
+            return {
+                smiles: smiles,
+                svg: svg,
+                mw: descriptors.exactmw ? parseFloat(descriptors.exactmw) : null,
+                clogp: descriptors.CrippenClogP ? parseFloat(descriptors.CrippenClogP) : null,
+                tpsa: descriptors.tpsa ? parseFloat(descriptors.tpsa) : null,
+                hba: descriptors.NumHBA ?? null,
+                hbd: descriptors.NumHBD ?? null,
+                fsp3: descriptors.FractionCSP3 ? parseFloat(descriptors.FractionCSP3) : null,
+                rotBonds: descriptors.NumRotatableBonds ?? null,
+                hac: descriptors.NumHeavyAtoms ?? null,
+                hetero: descriptors.NumHeteroatoms ?? null,
+                arRings: descriptors.NumAromaticRings ?? null,
+                stereo: definedStereo,
+                unspecified: 0
+            };
+        }
+
+        function renderView() {
+            if (currentView === 'cards') {
+                renderMolecules();
+            } else {
+                renderRadar();
+            }
+
+            document.getElementById('molecule-count').textContent =
+                `${currentMolecules.length} molecule${currentMolecules.length !== 1 ? 's' : ''}`;
+        }
+
+        function showNoMolecules() {
+            document.getElementById('molecules-list').innerHTML = `
+                <div class="no-molecules">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="3"/>
+                        <circle cx="4" cy="8" r="2"/>
+                        <circle cx="20" cy="8" r="2"/>
+                        <circle cx="4" cy="16" r="2"/>
+                        <circle cx="20" cy="16" r="2"/>
+                        <path d="M6 8h3M15 8h3M6 16h3M15 16h3M12 9V6M12 18v-3"/>
+                    </svg>
+                    <p>Draw a molecule in Ketcher to see its properties</p>
+                </div>
+            `;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+        }
+
+        function formatValue(val, decimals = 2) {
+            if (val === null || val === undefined) return 'N/A';
+            if (typeof val === 'number') return val.toFixed(decimals);
+            return val;
+        }
+
+        function renderMolecules() {
+            const container = document.getElementById('molecules-list');
+
+            if (currentMolecules.length === 0) {
+                showNoMolecules();
+                return;
+            }
+
+            container.innerHTML = currentMolecules.map((mol, index) => {
+                if (mol.error) {
+                    return `
+                        <div class="molecule-card">
+                            <div class="molecule-header">
+                                <span>Mol ${index + 1}</span>
+                                <span class="molecule-smiles" style="color: var(--accent);">Invalid structure</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                return `
+                <div class="molecule-card">
+                    <div class="molecule-header">
+                        <span>Mol ${index + 1}</span>
+                        <span class="molecule-smiles" title="${escapeHtml(mol.smiles)}">${escapeHtml(mol.smiles)}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${escapeJs(mol.smiles)}')" title="Copy SMILES">📋</button>
+                    </div>
+                    ${mol.svg ? `<div class="structure-preview">${mol.svg}</div>` : ''}
+                    <div class="properties-grid">
+                        <div class="property-cell">
+                            <div class="property-label">MW</div>
+                            <div class="property-value ${getMWClass(mol.mw)}">${formatValue(mol.mw, 1)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">cLogP</div>
+                            <div class="property-value ${getLogPClass(mol.clogp)}">${formatValue(mol.clogp)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">TPSA</div>
+                            <div class="property-value ${getTPSAClass(mol.tpsa)}">${formatValue(mol.tpsa, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">HBA</div>
+                            <div class="property-value ${getHBAClass(mol.hba)}">${formatValue(mol.hba, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">HBD</div>
+                            <div class="property-value ${getHBDClass(mol.hbd)}">${formatValue(mol.hbd, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">Fsp3</div>
+                            <div class="property-value">${formatValue(mol.fsp3)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">RotB</div>
+                            <div class="property-value ${getRotBClass(mol.rotBonds)}">${formatValue(mol.rotBonds, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">HAC</div>
+                            <div class="property-value">${formatValue(mol.hac, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">Hetero</div>
+                            <div class="property-value">${formatValue(mol.hetero, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">ArRings</div>
+                            <div class="property-value">${formatValue(mol.arRings, 0)}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">Stereo</div>
+                            <div class="property-value">${mol.stereo}</div>
+                        </div>
+                        <div class="property-cell">
+                            <div class="property-label">Unspec</div>
+                            <div class="property-value ${mol.unspecified > 0 ? 'warning' : ''}">${mol.unspecified}</div>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        function renderRadar() {
+            const container = document.getElementById('radar-container');
+            const legend = document.getElementById('radar-legend');
+
+            if (currentMolecules.length === 0 || currentMolecules.every(m => m.error)) {
+                if (radarChart) {
+                    radarChart.destroy();
+                    radarChart = null;
+                }
+                legend.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">Draw molecules to see radar comparison</p>';
+                return;
+            }
+
+            // Get valid molecules
+            const validMols = currentMolecules.filter(m => !m.error);
+
+            // Calculate dynamic ranges based on molecule values
+            const dynamicRanges = calculateDynamicRanges(validMols);
+
+            // Prepare labels (excluding HAC and Hetero as requested)
+            const labels = Object.keys(RADAR_RANGES).map(key => RADAR_RANGES[key].label);
+            const keys = Object.keys(RADAR_RANGES);
+
+            // Prepare datasets - normalize values to 0-100 scale
+            const datasets = validMols.map((mol, index) => {
+                const color = MOLECULE_COLORS[index % MOLECULE_COLORS.length];
+
+                const data = keys.map(key => {
+                    const val = mol[key];
+                    if (val === null || val === undefined) return 0;
+
+                    const range = dynamicRanges[key];
+                    // Normalize to 0-100 scale
+                    const normalized = ((val - range.min) / (range.max - range.min)) * 100;
+                    return Math.max(0, Math.min(100, normalized));
+                });
+
+                return {
+                    label: `Mol ${index + 1}`,
+                    data: data,
+                    backgroundColor: color.bg,
+                    borderColor: color.border,
+                    borderWidth: 2,
+                    pointBackgroundColor: color.border,
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: color.border
+                };
+            });
+
+            // Create or update chart
+            const ctx = document.getElementById('radar-chart').getContext('2d');
+
+            if (radarChart) {
+                radarChart.data.labels = labels;
+                radarChart.data.datasets = datasets;
+                radarChart.options.scales.r.pointLabels.callback = (label, index) => {
+                    const key = keys[index];
+                    const range = dynamicRanges[key];
+                    return `${label}\n(${range.min}-${range.max})`;
+                };
+                radarChart.update();
+            } else {
+                radarChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            r: {
+                                beginAtZero: true,
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    stepSize: 25,
+                                    color: 'rgba(255,255,255,0.5)',
+                                    backdropColor: 'transparent',
+                                    callback: (val) => val + '%'
+                                },
+                                grid: {
+                                    color: 'rgba(255,255,255,0.1)'
+                                },
+                                angleLines: {
+                                    color: 'rgba(255,255,255,0.1)'
+                                },
+                                pointLabels: {
+                                    color: '#e0e0e0',
+                                    font: { size: 10 },
+                                    callback: (label, index) => {
+                                        const key = keys[index];
+                                        const range = dynamicRanges[key];
+                                        return `${label} (${range.min}-${range.max})`;
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        const index = context.dataIndex;
+                                        const key = keys[index];
+                                        const mol = validMols[context.datasetIndex];
+                                        const val = mol[key];
+                                        return `${context.dataset.label}: ${formatValue(val, 2)}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Update legend
+            legend.innerHTML = `
+                <div class="radar-legend-title">Molecules</div>
+                ${validMols.map((mol, index) => {
+                    const color = MOLECULE_COLORS[index % MOLECULE_COLORS.length];
+                    return `
+                        <div class="radar-legend-item">
+                            <div class="radar-legend-color" style="background: ${color.border}"></div>
+                            <span>Mol ${index + 1}: ${escapeHtml(mol.smiles.substring(0, 20))}${mol.smiles.length > 20 ? '...' : ''}</span>
+                        </div>
+                    `;
+                }).join('')}
+            `;
+        }
+
+        function calculateDynamicRanges(molecules) {
+            const ranges = {};
+
+            for (const key of Object.keys(RADAR_RANGES)) {
+                const baseRange = RADAR_RANGES[key];
+                let max = baseRange.max;
+
+                // Check if any molecule exceeds the max
+                for (const mol of molecules) {
+                    const val = mol[key];
+                    if (val !== null && val !== undefined && val > max) {
+                        // Expand by 10%
+                        max = val * 1.1;
+                    }
+                }
+
+                ranges[key] = {
+                    min: baseRange.min,
+                    max: Math.round(max * 100) / 100 // Round to 2 decimals
+                };
+            }
+
+            return ranges;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeJs(text) {
+            return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        // Lipinski highlighting functions
+        function getMWClass(mw) {
+            if (mw === null) return '';
+            if (mw > 500) return 'alert';
+            if (mw > 450) return 'warning';
+            return '';
+        }
+
+        function getLogPClass(logp) {
+            if (logp === null) return '';
+            if (logp > 5) return 'alert';
+            if (logp > 4) return 'warning';
+            return '';
+        }
+
+        function getTPSAClass(tpsa) {
+            if (tpsa === null) return '';
+            if (tpsa > 140) return 'alert';
+            if (tpsa > 120) return 'warning';
+            return '';
+        }
+
+        function getHBAClass(hba) {
+            if (hba === null) return '';
+            if (hba > 10) return 'alert';
+            if (hba > 8) return 'warning';
+            return '';
+        }
+
+        function getHBDClass(hbd) {
+            if (hbd === null) return '';
+            if (hbd > 5) return 'alert';
+            if (hbd > 4) return 'warning';
+            return '';
+        }
+
+        function getRotBClass(rotb) {
+            if (rotb === null) return '';
+            if (rotb > 10) return 'alert';
+            if (rotb > 7) return 'warning';
+            return '';
+        }
+
+        // View toggle handlers
+        document.getElementById('view-cards').addEventListener('click', () => {
+            currentView = 'cards';
+            document.getElementById('view-cards').classList.add('active');
+            document.getElementById('view-radar').classList.remove('active');
+            document.getElementById('molecules-list').classList.remove('hidden');
+            document.getElementById('radar-container').classList.remove('active');
+            renderView();
+        });
+
+        document.getElementById('view-radar').addEventListener('click', () => {
+            currentView = 'radar';
+            document.getElementById('view-radar').classList.add('active');
+            document.getElementById('view-cards').classList.remove('active');
+            document.getElementById('molecules-list').classList.add('hidden');
+            document.getElementById('radar-container').classList.add('active');
+            renderView();
+        });
+
+        // Panel toggle - button is outside panel so it's always accessible
+        document.getElementById('panel-toggle').addEventListener('click', () => {
+            const panel = document.getElementById('properties-panel');
+            const toggle = document.getElementById('panel-toggle');
+            const isCollapsed = panel.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed', isCollapsed);
+            toggle.querySelector('span').textContent = isCollapsed ? '▶' : '◀';
+        });
+
+        // Initialize
+        initRDKit();
+        initKetcher();
+    </script>
+</body>
 </html>
