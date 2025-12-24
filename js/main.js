@@ -87,6 +87,18 @@ function updatePropertiesFromSmiles(smiles) {
 
         propertiesPanel.innerHTML = htmlInfo;
 
+        // Add event listeners for copy buttons after rendering
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.onclick = () => {
+                const smiles = btn.getAttribute('data-smiles');
+                navigator.clipboard.writeText(smiles);
+                // Simple visual feedback
+                const oldIcon = btn.innerHTML;
+                btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+                setTimeout(() => btn.innerHTML = oldIcon, 1000);
+            };
+        });
+
     } catch (e) {
         console.error("Error in updateProperties", e);
     }
@@ -96,16 +108,24 @@ function calculateForFragment(smiles, index) {
     let mol = null;
     try {
         mol = rdkit.get_mol(smiles);
-        if (!mol) return `<div class="molecule-card"><div class="molecule-title">Molecule ${index}</div><div style="color:red">Invalid Structure</div></div>`;
+        if (!mol) return `<div class="molecule-card"><div class="molecule-header"><div class="molecule-title">Mol ${index}</div></div><div style="padding:20px; color:#e63946">Invalid Structure</div></div>`;
+
+        // Generate SVG
+        let svg = "";
+        try {
+            // Standard RDKit minimal JS SVG generation
+            svg = mol.get_svg();
+        } catch (e) {
+            console.error("SVG generation failed", e);
+            svg = "SVG Error";
+        }
 
         // Calculate properties
         let descriptors = {};
         try {
             const descStr = mol.get_descriptors();
             descriptors = JSON.parse(descStr);
-        } catch (e) {
-            // console.warn("get_descriptors failed", e);
-        }
+        } catch (e) { }
 
         const safeGet = (key, fnName) => {
             if (descriptors[key] !== undefined) return descriptors[key];
@@ -113,55 +133,73 @@ function calculateForFragment(smiles, index) {
             return "N/A";
         };
 
-        const properties = {
-            "MW": safeGet('exactmw', 'get_molecular_weight'),
-            "ClogP": safeGet('lipinski_h_donors', 'get_logp') === "N/A" ? safeGet('clogp', 'get_logp') : safeGet('clogp', 'get_logp'),
-            "TPSA": safeGet('tpsa', 'get_tpsa'),
-            "HBA": safeGet('lipinski_h_acceptors', 'get_hba'),
-            "HBD": safeGet('lipinski_h_donors', 'get_hbd'),
-            "Fsp3": safeGet('fraction_csp3', 'get_fraction_csp3'),
-            "Rotatable Bonds": safeGet('num_rotatable_bonds', 'get_num_rotatable_bonds'),
-            "HAC": safeGet('heavy_atom_count', 'get_num_heavy_atoms'),
-            "Hetero Atoms": safeGet('num_heteroatoms', 'get_num_heteroatoms'),
-            "Ar Rings": safeGet('num_aromatic_rings', 'get_num_aromatic_rings'),
-            "Stereo": "Unspecified"
+        const propertyList = [
+            { label: "MW", value: safeGet('exactmw', 'get_molecular_weight') },
+            { label: "CLOGP", value: safeGet('lipinski_h_donors', 'get_logp') === "N/A" ? safeGet('clogp', 'get_logp') : safeGet('clogp', 'get_logp') },
+            { label: "TPSA", value: safeGet('tpsa', 'get_tpsa') },
+            { label: "HBA", value: safeGet('lipinski_h_acceptors', 'get_hba') },
+            { label: "HBD", value: safeGet('lipinski_h_donors', 'get_hbd') },
+            { label: "FSP3", value: safeGet('fraction_csp3', 'get_fraction_csp3') },
+            { label: "ROTB", value: safeGet('num_rotatable_bonds', 'get_num_rotatable_bonds') },
+            { label: "HAC", value: safeGet('heavy_atom_count', 'get_num_heavy_atoms') },
+            { label: "HETERO", value: safeGet('num_heteroatoms', 'get_num_heteroatoms') },
+            { label: "ARRINGS", value: safeGet('num_aromatic_rings', 'get_num_aromatic_rings') },
+            { label: "STEREO", value: 0 }, // Placeholder for stereo count
+            { label: "UNSPEC", value: 0 }   // Placeholder for unspecified stereo
+        ];
+
+        // Specific fallbacks for minimal build descriptor names
+        propertyList.forEach(p => {
+            if (p.value === "N/A") {
+                const map = {
+                    "MW": "amw", "CLOGP": "mollogp", "HBA": "numhacceptors", "HBD": "numhdonors",
+                    "FSP3": "fractioncsp3", "ROTB": "numrotatablebonds", "HAC": "numheavyatoms",
+                    "HETERO": "numheteroatoms", "ARRINGS": "numaromaticrings"
+                };
+                if (map[p.label] && descriptors[map[p.label]]) p.value = descriptors[map[p.label]];
+            }
+        });
+
+        const format = (v) => {
+            if (v === "N/A" || v === undefined) return '<span class="na">N/A</span>';
+            return typeof v === 'number' ? v.toFixed(2) : v;
         };
 
-        // Manual fallbacks for common descriptor names
-        if (properties["MW"] === "N/A" && descriptors["amw"]) properties["MW"] = descriptors["amw"];
-        if (properties["ClogP"] === "N/A" && descriptors["mollogp"]) properties["ClogP"] = descriptors["mollogp"];
-        if (properties["HBA"] === "N/A" && descriptors["numhacceptors"]) properties["HBA"] = descriptors["numhacceptors"];
-        if (properties["HBD"] === "N/A" && descriptors["numhdonors"]) properties["HBD"] = descriptors["numhdonors"];
-        if (properties["Fsp3"] === "N/A" && descriptors["fractioncsp3"]) properties["Fsp3"] = descriptors["fractioncsp3"];
-        if (properties["Rotatable Bonds"] === "N/A" && descriptors["numrotatablebonds"]) properties["Rotatable Bonds"] = descriptors["numrotatablebonds"];
-        if (properties["HAC"] === "N/A" && descriptors["numheavyatoms"]) properties["HAC"] = descriptors["numheavyatoms"];
-        if (properties["Hetero Atoms"] === "N/A" && descriptors["numheteroatoms"]) properties["Hetero Atoms"] = descriptors["numheteroatoms"];
-        if (properties["Ar Rings"] === "N/A" && descriptors["numaromaticrings"]) properties["Ar Rings"] = descriptors["numaromaticrings"];
-
-        const format = (v) => typeof v === 'number' ? v.toFixed(2) : v;
-
-        let tableRows = '';
-        for (const [key, value] of Object.entries(properties)) {
-            tableRows += `
-                <tr>
-                    <td class="prop-label">${key}</td>
-                    <td class="prop-value">${format(value)}</td>
-                </tr>
+        let gridItems = '';
+        propertyList.forEach(p => {
+            gridItems += `
+                <div class="prop-item">
+                    <span class="prop-label">${p.label}</span>
+                    <span class="prop-value ${p.value === "N/A" ? 'na' : ''}">${format(p.value)}</span>
+                </div>
             `;
-        }
+        });
+
+        const copyIcon = `<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
 
         return `
             <div class="molecule-card">
-                <div class="molecule-title">Molecule ${index}</div>
-                <table class="prop-table">
-                    ${tableRows}
-                </table>
+                <div class="molecule-header">
+                    <div class="mol-title-group">
+                        <span class="molecule-title">Mol ${index}</span>
+                        <span class="molecule-smiles">${smiles}</span>
+                    </div>
+                    <button class="copy-btn" data-smiles="${smiles}" title="Copy SMILES">
+                        ${copyIcon}
+                    </button>
+                </div>
+                <div class="molecule-img-container">
+                    ${svg}
+                </div>
+                <div class="prop-grid">
+                    ${gridItems}
+                </div>
             </div>
         `;
 
     } catch (e) {
         console.error("Error calculating for fragment", e);
-        return `<div class="molecule-card"><div class="molecule-title">Molecule ${index}</div><div style="color:red">Calculation Error</div></div>`;
+        return `<div class="molecule-card"><div class="molecule-header"><div class="molecule-title">Mol ${index}</div></div><div style="padding:20px; color:#e63946">Calculation Error</div></div>`;
     } finally {
         if (mol) mol.delete();
     }

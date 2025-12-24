@@ -1,4 +1,5 @@
-body, html {
+body,
+html {
     margin: 0;
     padding: 0;
     height: 100%;
@@ -26,78 +27,175 @@ body, html {
 }
 
 #properties-panel {
-    width: 320px;
-    background: #f9f9f9;
+    width: 380px;
+    background: #0d1b2a;
     padding: 20px;
     box-sizing: border-box;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    color: #e0e1dd;
 }
 
 #properties-panel h2 {
     margin-top: 0;
-    font-size: 1.2rem;
-    color: #333;
-    border-bottom: 2px solid #0056b3;
+    font-size: 1.4rem;
+    color: #415a77;
+    border-bottom: 2px solid #1b263b;
     padding-bottom: 10px;
 }
 
 .hint {
-    color: #666;
+    color: #778da9;
     font-style: italic;
     text-align: center;
     margin-top: 20px;
 }
 
 .molecule-card {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 15px;
+    background: #1b263b;
+    border: 1px solid #415a77;
+    border-radius: 8px;
     margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.molecule-header {
+    background: #0d1b2a;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #415a77;
+}
+
+.mol-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    overflow: hidden;
 }
 
 .molecule-title {
     font-weight: bold;
-    margin-bottom: 10px;
-    color: #444;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
+    color: #e63946;
+    white-space: nowrap;
 }
 
-.prop-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
+.molecule-smiles {
+    font-size: 0.75rem;
+    color: #778da9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: monospace;
 }
 
-.prop-table td {
-    padding: 6px 0;
-    border-bottom: 1px solid #f0f0f0;
+.copy-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
 }
 
-.prop-table tr:last-child td {
-    border-bottom: none;
+.copy-btn:hover {
+    opacity: 1;
+}
+
+.copy-btn svg {
+    fill: #778da9;
+    width: 18px;
+    height: 18px;
+}
+
+.molecule-img-container {
+    background: white;
+    margin: 10px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 150px;
+}
+
+.molecule-img-container svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.prop-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid #415a77;
+}
+
+/* Custom Scrollbar for properties panel */
+#properties-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+#properties-panel::-webkit-scrollbar-track {
+    background: #0d1b2a;
+}
+
+#properties-panel::-webkit-scrollbar-thumb {
+    background: #415a77;
+    border-radius: 3px;
+}
+
+#properties-panel::-webkit-scrollbar-thumb:hover {
+    background: #778da9;
+}
+
+.prop-item {
+    padding: 10px 5px;
+    text-align: center;
+    border-right: 1px solid #415a77;
+    border-bottom: 1px solid #415a77;
+    transition: background 0.2s;
+}
+
+.prop-item:hover {
+    background: #1e2d3d;
+}
+
+.prop-item:nth-child(3n) {
+    border-right: none;
 }
 
 .prop-label {
-    color: #666;
-    text-align: left;
+    display: block;
+    font-size: 0.7rem;
+    color: #778da9;
+    text-transform: uppercase;
+    margin-bottom: 4px;
 }
 
 .prop-value {
-    font-weight: 500;
-    text-align: right;
-    color: #222;
+    display: block;
+    font-size: 1rem;
+    font-weight: bold;
+    color: #52b788;
+}
+
+.prop-value.na {
+    color: #e63946;
 }
 
 #loading-status {
-    background: #fff3cd;
-    color: #856404;
+    background: #1b263b;
+    color: #e0e1dd;
     padding: 10px;
+    border: 1px solid #415a77;
     border-radius: 4px;
     margin-bottom: 10px;
     display: none;
+    font-size: 0.9rem;
 }
