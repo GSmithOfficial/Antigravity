@@ -1,0 +1,103 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+}
+
+#app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+#ketcher-container {
+    flex: 1;
+    position: relative;
+    border-right: 1px solid #ccc;
+}
+
+#ketcher-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+}
+
+#properties-panel {
+    width: 320px;
+    background: #f9f9f9;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#properties-panel h2 {
+    margin-top: 0;
+    font-size: 1.2rem;
+    color: #333;
+    border-bottom: 2px solid #0056b3;
+    padding-bottom: 10px;
+}
+
+.hint {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.molecule-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.molecule-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #444;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+.prop-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.prop-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.prop-table tr:last-child td {
+    border-bottom: none;
+}
+
+.prop-label {
+    color: #666;
+    text-align: left;
+}
+
+.prop-value {
+    font-weight: 500;
+    text-align: right;
+    color: #222;
+}
+
+#loading-status {
+    background: #fff3cd;
+    color: #856404;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    display: none;
+}

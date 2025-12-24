@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chemdraw Alternative</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app-container">
+        <div id="ketcher-container">
+            <iframe id="ketcher-frame" src="assets/ketcher/standalone/index.html"></iframe>
+        </div>
+        <div id="properties-panel">
+            <h2>Properties</h2>
+            <div id="loading-status">Initializing RDKit...</div>
+            <div id="properties-content">
+                <p class="hint">Draw a molecule to see properties.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load RDKit JS -->
+    <script src="assets/RDKit_minimal.js"></script>
+    <!-- Load Main Logic -->
+    <script src="js/main.js"></script>
+</body>
+</html>
