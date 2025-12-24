@@ -2,14 +2,41 @@
 let rdkit = null;
 const propertiesPanel = document.getElementById('properties-content');
 const loadingStatus = document.getElementById('loading-status');
+const radarContainer = document.getElementById('radar-container');
 let ketcherReady = false;
+let currentMolecules = []; // Store calculated data for view switching
+let currentView = 'card-large'; // card-large, card-compact, radar
+let radarChartInstance = null;
+
+// View Toggles
+document.getElementById('btn-card-large').onclick = () => switchView('card-large');
+document.getElementById('btn-card-compact').onclick = () => switchView('card-compact');
+document.getElementById('btn-radar').onclick = () => switchView('radar');
+
+function switchView(view) {
+    currentView = view;
+
+    // Update active button state
+    document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`btn-${view}`).classList.add('active');
+
+    // Show/Hide containers
+    if (view === 'radar') {
+        radarContainer.style.display = 'block';
+        propertiesPanel.style.display = 'none';
+        renderRadar();
+    } else {
+        radarContainer.style.display = 'none';
+        propertiesPanel.style.display = 'block';
+        renderCards();
+    }
+}
 
 // Initialize RDKit
 window.initRDKitModule()
     .then((instance) => {
         rdkit = instance;
         console.log("RDKit initialized v" + rdkit.version());
-        // Show something while waiting for Ketcher
         loadingStatus.innerText = "RDKit Ready. Waiting for Ketcher...";
         loadingStatus.style.display = 'block';
     })
@@ -18,31 +45,24 @@ window.initRDKitModule()
         showError("Error loading RDKit. Please check console.");
     });
 
-// Listen for messages from Ketcher iframe (via bridge)
+// Bridge Listener
 window.addEventListener('message', (event) => {
-    // Note: Secure origin check should be here in production, but we allow * for local file usage context
     const data = event.data;
-
     if (data.type === 'KETCHER_READY') {
         console.log("Ketcher Bridge Connected!");
         ketcherReady = true;
         loadingStatus.style.display = 'none';
-        // Request initial struct
         requestStruct();
     }
-
     if (data.type === 'KETCHER_STRUCT') {
-        if (!rdkit) return; // Wait for RDKit
-        updatePropertiesFromSmiles(data.smiles);
+        if (!rdkit) return;
+        processStructure(data.smiles);
     }
 });
 
 function requestStruct() {
     const iframe = document.getElementById('ketcher-frame');
-    if (iframe) {
-        // Send message to iframe to trigger a sendStruct
-        iframe.contentWindow.postMessage({ type: 'GET_SMILES' }, '*');
-    }
+    if (iframe) iframe.contentWindow.postMessage({ type: 'GET_SMILES' }, '*');
 }
 
 function showError(msg) {
@@ -52,156 +72,227 @@ function showError(msg) {
     loadingStatus.style.color = '#721c24';
 }
 
-// Fallback: If we don't get a ready message soon, warn user about server
 setTimeout(() => {
     if (!ketcherReady) {
         showError(`
-            Could not connect to Ketcher. <br/><br/>
-            <strong>Are you running this from a file:// URL?</strong><br/>
-            For security reasons, this app requires a local web server to function correctly.<br/>
-            Please use VSCode "Live Server" or run <code>python -m http.server</code> in the project folder.
+            Could not connect to Ketcher.<br/><br/>
+            <strong>Running from file://?</strong><br/>
+            Please use a local web server (vscode Live Server or python -m http.server).
         `);
     }
 }, 5000);
 
-
-function updatePropertiesFromSmiles(smiles) {
+function processStructure(smiles) {
     if (!smiles) {
-        propertiesPanel.innerHTML = '<p class="hint">Draw a molecule to see properties.</p>';
+        currentMolecules = [];
+        renderCards();
         return;
     }
 
     try {
         const fragments = smiles.split('.').filter(s => s.trim().length > 0);
+        currentMolecules = fragments.map((frag, idx) => calculateProperties(frag, idx + 1));
 
-        if (fragments.length === 0) {
-            propertiesPanel.innerHTML = '<p class="hint">Draw a molecule to see properties.</p>';
-            return;
+        if (currentView === 'radar') {
+            renderRadar();
+        } else {
+            renderCards();
         }
 
-        let htmlInfo = '';
-
-        fragments.forEach((fragSmiles, index) => {
-            htmlInfo += calculateForFragment(fragSmiles, index + 1);
-        });
-
-        propertiesPanel.innerHTML = htmlInfo;
-
-        // Add event listeners for copy buttons after rendering
-        document.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.onclick = () => {
-                const smiles = btn.getAttribute('data-smiles');
-                navigator.clipboard.writeText(smiles);
-                // Simple visual feedback
-                const oldIcon = btn.innerHTML;
-                btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-                setTimeout(() => btn.innerHTML = oldIcon, 1000);
-            };
-        });
-
     } catch (e) {
-        console.error("Error in updateProperties", e);
+        console.error("Error processing structure", e);
     }
 }
 
-function calculateForFragment(smiles, index) {
+// Core Calculation Logic
+function calculateProperties(smiles, index) {
     let mol = null;
     try {
         mol = rdkit.get_mol(smiles);
-        if (!mol) return `<div class="molecule-card"><div class="molecule-header"><div class="molecule-title">Mol ${index}</div></div><div style="padding:20px; color:#e63946">Invalid Structure</div></div>`;
+        if (!mol) return { index, error: "Invalid Structure", smiles };
 
-        // Generate SVG
-        let svg = "";
-        try {
-            // Standard RDKit minimal JS SVG generation
-            svg = mol.get_svg();
-        } catch (e) {
-            console.error("SVG generation failed", e);
-            svg = "SVG Error";
-        }
+        // 1. Generate SVG
+        let svg = mol.get_svg();
 
-        // Calculate properties
-        let descriptors = {};
+        // 2. Calculate Properties (descriptors + manual SMARTS)
+        const descriptors = {};
+
+        // Try getting JSON descriptors first
         try {
-            const descStr = mol.get_descriptors();
-            descriptors = JSON.parse(descStr);
+            const descJSON = mol.get_descriptors();
+            if (descJSON) Object.assign(descriptors, JSON.parse(descJSON));
         } catch (e) { }
 
-        const safeGet = (key, fnName) => {
+        // Helper for Smart Counts
+        const countPattern = (pattern) => {
+            try {
+                const qmol = rdkit.get_qmol(pattern);
+                const matches = mol.get_substruct_matches(qmol);
+                qmol.delete();
+                return JSON.parse(matches).length;
+            } catch (e) { return 0; }
+        };
+
+        // Manual Calculations if missing
+        // HBD: [#7,#8;!H0]
+        // HBA: [#7,#8] (simplified)
+        // RotBond: [!$(*#*)&!D1]-&!@[!$(*#*)&!D1]
+        // ArRings: a1aaaaa1 etc, hard to do generic ring count in minimal without Descriptors.
+        // If descriptors are empty, we try best effort.
+
+        const val = (key, fallbackFn) => {
             if (descriptors[key] !== undefined) return descriptors[key];
-            if (mol[fnName]) return mol[fnName]();
+            if (typeof fallbackFn === 'function') return fallbackFn();
             return "N/A";
         };
 
-        const propertyList = [
-            { label: "MW", value: safeGet('exactmw', 'get_molecular_weight') },
-            { label: "CLOGP", value: safeGet('lipinski_h_donors', 'get_logp') === "N/A" ? safeGet('clogp', 'get_logp') : safeGet('clogp', 'get_logp') },
-            { label: "TPSA", value: safeGet('tpsa', 'get_tpsa') },
-            { label: "HBA", value: safeGet('lipinski_h_acceptors', 'get_hba') },
-            { label: "HBD", value: safeGet('lipinski_h_donors', 'get_hbd') },
-            { label: "FSP3", value: safeGet('fraction_csp3', 'get_fraction_csp3') },
-            { label: "ROTB", value: safeGet('num_rotatable_bonds', 'get_num_rotatable_bonds') },
-            { label: "HAC", value: safeGet('heavy_atom_count', 'get_num_heavy_atoms') },
-            { label: "HETERO", value: safeGet('num_heteroatoms', 'get_num_heteroatoms') },
-            { label: "ARRINGS", value: safeGet('num_aromatic_rings', 'get_num_aromatic_rings') },
-            { label: "STEREO", value: 0 }, // Placeholder for stereo count
-            { label: "UNSPEC", value: 0 }   // Placeholder for unspecified stereo
-        ];
-
-        // Specific fallbacks for minimal build descriptor names
-        propertyList.forEach(p => {
-            if (p.value === "N/A") {
-                const map = {
-                    "MW": "amw", "CLOGP": "mollogp", "HBA": "numhacceptors", "HBD": "numhdonors",
-                    "FSP3": "fractioncsp3", "ROTB": "numrotatablebonds", "HAC": "numheavyatoms",
-                    "HETERO": "numheteroatoms", "ARRINGS": "numaromaticrings"
-                };
-                if (map[p.label] && descriptors[map[p.label]]) p.value = descriptors[map[p.label]];
-            }
-        });
-
-        const format = (v) => {
-            if (v === "N/A" || v === undefined) return '<span class="na">N/A</span>';
-            return typeof v === 'number' ? v.toFixed(2) : v;
+        const props = {
+            MW: val('amw', () => val('exactmw', () => mol.get_molecular_weight ? mol.get_molecular_weight() : "N/A")),
+            CLOGP: val('mollogp', () => val('clogp', null)), // No manual fallback for LogP in minimal
+            TPSA: val('tpsa', () => val('TPSA', null)), // standard minimal key
+            HBA: val('numhacceptors', () => countPattern('[#7,#8]')),
+            HBD: val('numhdonors', () => countPattern('[#7,#8;!H0]')),
+            FSP3: val('fractioncsp3', null),
+            ROTB: val('numrotatablebonds', () => countPattern('[!$(*#*)&!D1]-&!@[!$(*#*)&!D1]')),
+            HAC: val('heavyatomcount', () => val('numheavyatoms', () => mol.get_num_atoms ? mol.get_num_atoms() : "N/A")),
+            HETERO: val('numheteroatoms', () => countPattern('[!#6;!#1]')),
+            ARRINGS: val('numaromaticrings', null), // hard to count via limited SMARTS without ring info
+            STEREO: "N/A",
+            UNSPEC: "N/A"
         };
 
-        let gridItems = '';
-        propertyList.forEach(p => {
-            gridItems += `
-                <div class="prop-item">
-                    <span class="prop-label">${p.label}</span>
-                    <span class="prop-value ${p.value === "N/A" ? 'na' : ''}">${format(p.value)}</span>
-                </div>
-            `;
-        });
+        // Clean N/A for graph (use 0)
+        const numeric = {};
+        for (let k in props) numeric[k] = (props[k] === "N/A") ? 0 : props[k];
+
+        return {
+            index,
+            smiles,
+            svg,
+            props,
+            numeric,
+            error: null
+        };
+
+    } catch (e) {
+        console.error(e);
+        return { index, error: "Calc Error", smiles };
+    } finally {
+        if (mol) mol.delete();
+    }
+}
+
+function renderCards() {
+    if (currentMolecules.length === 0) {
+        propertiesPanel.innerHTML = '<p class="hint">Draw a molecule to see properties.</p>';
+        return;
+    }
+
+    // Add copy listener only once roughly, or re-add
+
+    propertiesPanel.innerHTML = currentMolecules.map(mol => {
+        if (mol.error) return `<div class="molecule-card"><div class="molecule-header"><div class="molecule-title">Mol ${mol.index}</div></div><div style="padding:20px; color:#e63946">${mol.error}</div></div>`;
+
+        const compactClass = currentView === 'card-compact' ? 'compact' : '';
+        const format = (v) => (v === "N/A") ? '<span class="na">N/A</span>' : (typeof v === 'number' ? v.toFixed(2) : v);
+
+        const gridItems = Object.entries(mol.props).map(([k, v]) => `
+            <div class="prop-item">
+                <span class="prop-label">${k}</span>
+                <span class="prop-value ${v === "N/A" ? 'na' : ''}">${format(v)}</span>
+            </div>
+        `).join('');
 
         const copyIcon = `<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
 
         return `
-            <div class="molecule-card">
+            <div class="molecule-card ${compactClass}">
                 <div class="molecule-header">
                     <div class="mol-title-group">
-                        <span class="molecule-title">Mol ${index}</span>
-                        <span class="molecule-smiles">${smiles}</span>
+                        <span class="molecule-title">Mol ${mol.index}</span>
+                        <span class="molecule-smiles">${mol.smiles}</span>
                     </div>
-                    <button class="copy-btn" data-smiles="${smiles}" title="Copy SMILES">
+                    <button class="copy-btn" data-smiles="${mol.smiles}" title="Copy SMILES">
                         ${copyIcon}
                     </button>
                 </div>
                 <div class="molecule-img-container">
-                    ${svg}
+                    ${mol.svg}
                 </div>
                 <div class="prop-grid">
                     ${gridItems}
                 </div>
             </div>
         `;
+    }).join('');
 
-    } catch (e) {
-        console.error("Error calculating for fragment", e);
-        return `<div class="molecule-card"><div class="molecule-header"><div class="molecule-title">Mol ${index}</div></div><div style="padding:20px; color:#e63946">Calculation Error</div></div>`;
-    } finally {
-        if (mol) mol.delete();
-    }
+    // Re-attach listeners
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.onclick = () => {
+            navigator.clipboard.writeText(btn.getAttribute('data-smiles'));
+            // animation
+            const old = btn.innerHTML;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:#52b788"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+            setTimeout(() => btn.innerHTML = old, 1000);
+        };
+    });
 }
 
+function renderRadar() {
+    if (radarChartInstance) radarChartInstance.destroy();
+
+    const ctx = document.getElementById('radarChart');
+    if (!currentMolecules.length) return;
+
+    // Filter out error mols
+    const validMols = currentMolecules.filter(m => !m.error);
+    if (!validMols.length) return;
+
+    // Select keys that make sense for Radar (normalized ish?)
+    // Radar plots are bad if scales differ wildly (MW 300 vs LogP 2). 
+    // Usually we plot specific descriptors. Let's just plot basic Lipinski-ish ones.
+    const keys = ['CLOGP', 'TPSA', 'HBA', 'HBD', 'ROTB', 'HAC'];
+    // TPSA and HAC can be large, LogP small. Chart.js radar creates one axis per radial unless configured? 
+    // Actually standard radar is single scale. We might need normalized data or just raw and let user see.
+    // Let's stick to raw for now as requested "delta values for each value" implies comparison.
+
+    // Dataset colors
+    const colors = [
+        'rgba(255, 99, 132, 0.5)',
+        'rgba(54, 162, 235, 0.5)',
+        'rgba(255, 206, 86, 0.5)',
+        'rgba(75, 192, 192, 0.5)',
+        'rgba(153, 102, 255, 0.5)'
+    ];
+
+    const datasets = validMols.map((m, i) => ({
+        label: `Mol ${m.index}`,
+        data: keys.map(k => m.numeric[k]),
+        backgroundColor: colors[i % colors.length],
+        borderColor: colors[i % colors.length].replace('0.5', '1'),
+        borderWidth: 1
+    }));
+
+    radarChartInstance = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: keys,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#e0e1dd' }
+                }
+            }
+        }
+    });
+}
